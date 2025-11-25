@@ -16,6 +16,9 @@ import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 // --------------------------------------------------------
 import ExploreScreen from './src/screens/ExploreScreen';
+import ProductDetailScreen from './src/screens/ProductDetailScreen';
+import CartScreen from './src/screens/CartScreen';
+import { CartProvider } from './src/context/CartContext';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -78,15 +81,22 @@ function MainTabNavigator() {
     // App Principal
     export default function App() {
     return (
-        <NavigationContainer>
-        <StatusBar style="dark" /> 
-        <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Splash" component={SplashScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="RecoverPassword" component={RecoverPasswordScreen} />
-            <Stack.Screen name="Main" component={MainTabNavigator} />
-        </Stack.Navigator>
-        </NavigationContainer>
+        <CartProvider>
+            <NavigationContainer>
+                <StatusBar style="dark" /> 
+                <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="Splash" component={SplashScreen} />
+                    <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="Register" component={RegisterScreen} />
+                    <Stack.Screen name="RecoverPassword" component={RecoverPasswordScreen} />
+
+                    <Stack.Screen name="Main" component={MainTabNavigator} />
+                    <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
+
+                    <Stack.Screen name="Cart" component={CartScreen} />
+                </Stack.Navigator>
+            </NavigationContainer>
+        </CartProvider>
+        
     );
 }

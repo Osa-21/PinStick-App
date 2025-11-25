@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,50 +10,115 @@ import {
     TouchableOpacity,
     FlatList,
     Platform,
-    StatusBar as RNStatusBar
+    StatusBar as RNStatusBar,
+    ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+// Importamos useFocusEffect para recargar al entrar a la pantalla
+import { useFocusEffect } from '@react-navigation/native';
+
+// --- IMPORTACIONES DE FIREBASE ---
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../config/firebase';
+
+// 1. IMPORTAMOS EL HOOK DEL CARRITO
+import { useCart } from '../context/CartContext';
 
 const COLORS = {
     purple: '#5E2B87',
-    orange: '#FF8c00',
+    orange: '#FF9900',
     bg: '#f5f5f5',
     white: '#FFFFFF',
     textDark: '#333333',
     textLight: '#666666',
 };
 
-// Datos de ejemplo para Accesos Rápidos
+// Datos estáticos solo para los botones rápidos (no cambian)
 const QUICK_ACTIONS = [
-    {id: '1', name: 'Personalizado', icon: 'brush-outline' }, // Icono más artístico
-    {id: '2', name: 'Localización', icon: 'map-outline' },    // Icono de mapa/marcador
-    {id: '3', name: 'Pines', icon: 'ribbon-outline' },        // Icono representativo
+    { id: '1', name: 'Personalizado', icon: 'brush-outline' },
+    { id: '2', name: 'Localización', icon: 'map-outline' },
+    { id: '3', name: 'Pines', icon: 'ribbon-outline' },
     { id: '4', name: 'Stickers', icon: 'layers-outline' },
 ];
 
-// Datos de ejemplo para Stickers (incluyendo la opción de "Crear")
-const STICKERS_DATA = [
-    { id: 'create', isCreateAction: true },
-    { id: '1', name: 'Velociraptor', price: '$25', image: 'https://cdn-icons-png.flaticon.com/512/1998/1998749.png' },
-    { id: '2', name: 'Caballero RPG', price: '$25', image: 'https://cdn-icons-png.flaticon.com/512/1037/1037979.png' },
-];
-
-// Datos de ejemplo para Pines
-const PINS_DATA = [
-    { id: '10', name: 'Cinnamoroll', price: '$140', image: 'https://i.pinimg.com/originals/fd/85/e8/fd85e8f1e2e43d6947a0b02ecab91c21.png' },
-    { id: '11', name: 'Spiderman', price: '$140', image: 'https://cdn-icons-png.flaticon.com/512/1090/1090797.png' },
-];
-
 const HomeScreen = ({ navigation }) => {
+  // Estados para guardar los datos reales de Firebase
+    const [stickers, setStickers] = useState([]);
+    const [pins, setPins] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const { cartCount } = useCart();
 
-    // Componente para renderizar cada Sticker/Pin
+
+    // Función para mezclar un array (Algoritmo Fisher-Yates)
+    const shuffleArray = (array) => {
+        let currentIndex = array.length, randomIndex;
+        // Mientras queden elementos a mezclar...
+        while (currentIndex !== 0) {
+        // Elegir un elemento restante...
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        // E intercambiarlo con el elemento actual.
+        [array[currentIndex], array[randomIndex]] = [
+            array[randomIndex], array[currentIndex]];
+        }
+        return array;
+    };
+
+    // --- FUNCIÓN PARA TRAER DATOS DE FIREBASE ---
+    const fetchData = async () => {
+        try {
+        //console.log("📡 Conectando a Firebase Project ID:", db.app.options.projectId); // <--- AGREGA ESTO
+        setLoading(true);
+        const productsRef = collection(db, 'products');
+
+        // 1. Traer Stickers
+        const stickersQuery = query(productsRef, where('category', '==', 'stickers'));
+        const stickersSnapshot = await getDocs(stickersQuery);
+        let stickersList = stickersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Mezclar y limitar a 10
+        stickersList = shuffleArray(stickersList).slice(0, 10);
+
+        // Agregamos el item especial "Crea tu diseño" al principio
+        const stickersWithCreateOption = [{ id: 'create_sticker', isCreateAction: true }, ...stickersList];
+        setStickers(stickersWithCreateOption);
+
+        // 2. Traer Pines
+        const pinsQuery = query(productsRef, where('category', '==', 'pines')); // O 'pines'
+        const pinsSnapshot = await getDocs(pinsQuery);
+        let pinsList = pinsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Mezclar y limitar a 10
+        pinsList = shuffleArray(pinsList).slice(0, 10);
+
+        // Agregamos el item especial "Crea tu diseño" TAMBIÉN AQUÍ
+        const pinsWithCreateOption = [{ id: 'create_pin', isCreateAction: true }, ...pinsList];
+        setPins(pinsWithCreateOption);
+
+        } catch (error) {
+        console.error("Error al cargar home:", error);
+        } finally {
+        setLoading(false);
+        }
+    };
+
+    // Usamos useFocusEffect en lugar de useEffect para que se ejecute cada vez que "enfocamos" la pantalla
+    useFocusEffect(
+        useCallback(() => {
+        fetchData();
+        }, [])
+    );
+    // --------------------------------------------
+
     const renderProductItem = ({ item }) => {
+        // Tarjeta Especial "Crea Tu Diseño"
         if (item.isCreateAction) {
         return (
             <TouchableOpacity style={[styles.productCard, styles.createCard]}>
             <Image 
-                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3389/3389023.png' }} // Icono lápiz ejemplo
+                // Usamos un icono diferente si es Pin o Sticker si quisieras, por ahora el mismo lápiz
+                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3389/3389023.png' }} 
                 style={styles.createIcon} 
             />
             <TouchableOpacity style={styles.createButton}>
@@ -63,31 +128,36 @@ const HomeScreen = ({ navigation }) => {
         );
         }
 
+        // Tarjeta de Producto Normal (CONECTADA A DETALLE)
         return (
-        <View style={styles.productCard}>
+        <TouchableOpacity 
+            style={styles.productCard}
+            onPress={() => navigation.navigate('ProductDetail', { product: item })} 
+        >
             <View style={styles.priceTag}>
-            <Text style={styles.priceText}>{item.price}</Text>
+            <Text style={styles.priceText}>${item.price}</Text>
             </View>
-            <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="contain" />
+            <Image 
+            source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }} 
+            style={styles.productImage} 
+            resizeMode="contain" 
+            />
             <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
             <TouchableOpacity style={styles.addButton}>
             <Text style={styles.addButtonText}>Agregar</Text>
             <Ionicons name="cart" size={14} color="white" style={{marginLeft: 4}} />
             </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
         );
     };
 
     return (
         <View style={styles.mainContainer}>
-        {/* HEADER PERSONALIZADO */}
+        {/* HEADER */}
         <View style={styles.headerContainer}>
             <SafeAreaView>
             <View style={styles.headerContent}>
-                {/* Logo */}
                 <Image source={require('../../assets/logo.png')} style={styles.headerLogo} />
-                
-                {/* Barra de Búsqueda */}
                 <View style={styles.searchContainer}>
                 <Ionicons name="search" size={20} color={COLORS.textLight} style={{marginRight: 8}} />
                 <TextInput 
@@ -96,10 +166,11 @@ const HomeScreen = ({ navigation }) => {
                     style={styles.searchInput}
                 />
                 </View>
-
-                {/* Iconos derecha: Carrito y Perfil (NUEVO REQUERIMIENTO) */}
                 <View style={styles.headerIcons}>
-                <TouchableOpacity style={{marginRight: 15}}>
+                <TouchableOpacity 
+                    style={{marginRight: 15}}
+                    onPress={() => navigation.navigate('Cart')}
+                >
                     <Ionicons name="cart-outline" size={26} color={COLORS.white} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => navigation.navigate('Perfil')}>
@@ -112,7 +183,7 @@ const HomeScreen = ({ navigation }) => {
 
         <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
             
-            {/* BANNER DE OFERTA */}
+            {/* BANNER */}
             <LinearGradient
             colors={[COLORS.purple, COLORS.orange]}
             start={{ x: 0, y: 0 }}
@@ -127,7 +198,6 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.bannerButtonText}>Ver Oferta</Text>
                 </TouchableOpacity>
             </View>
-            {/* Imagen decorativa del banner (opcional) */}
             <Image 
                 source={{ uri: 'https://cdn-icons-png.flaticon.com/512/4578/4578563.png' }} 
                 style={styles.bannerImage} 
@@ -147,35 +217,41 @@ const HomeScreen = ({ navigation }) => {
             ))}
             </View>
 
-            {/* SECCIÓN STICKERS */}
-            <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Stickers</Text>
-            <FlatList
-                data={STICKERS_DATA}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={item => item.id}
-                renderItem={renderProductItem}
-                contentContainerStyle={{ paddingHorizontal: 20 }}
-            />
-            </View>
+            {/* --- SECCIONES DINÁMICAS --- */}
+            {loading ? (
+            <ActivityIndicator size="large" color={COLORS.purple} style={{ marginTop: 20 }} />
+            ) : (
+            <>
+                {/* SECCIÓN STICKERS */}
+                <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Stickers</Text>
+                <FlatList
+                    data={stickers}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyExtractor={item => item.id}
+                    renderItem={renderProductItem}
+                    contentContainerStyle={{ paddingHorizontal: 20 }}
+                />
+                </View>
 
-            {/* SECCIÓN PINES */}
-            <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Pines</Text>
-            <FlatList
-                data={PINS_DATA}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={item => item.id}
-                renderItem={renderProductItem}
-                contentContainerStyle={{ paddingHorizontal: 20 }}
-            />
-            </View>
+                {/* SECCIÓN PINES */}
+                <View style={styles.sectionContainer}>
+                    <Text style={styles.sectionTitle}>Pines</Text>
+                        <FlatList
+                            data={pins}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            keyExtractor={item => item.id}
+                            renderItem={renderProductItem}
+                            contentContainerStyle={{ paddingHorizontal: 20 }}
+                            ListEmptyComponent={<Text style={{marginLeft: 20, color: '#999'}}>No hay pines disponibles</Text>}
+                        />
+                </View>
+            </>
+            )}
 
-            {/* Espacio extra al final para que no se tape con el tab bar */}
             <View style={{ height: 80 }} />
-
         </ScrollView>
         </View>
     );
@@ -186,10 +262,9 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: COLORS.bg,
     },
-    // --- HEADER ---
     headerContainer: {
         backgroundColor: COLORS.purple,
-        paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight + 10 : 0, // Ajuste para Android
+        paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight + 10 : 0,
         paddingBottom: 15,
         borderBottomLeftRadius: 20,
         borderBottomRightRadius: 20,
@@ -203,8 +278,8 @@ const styles = StyleSheet.create({
     headerLogo: {
         width: 40,
         height: 40,
-        borderRadius: 20, // Si el logo es cuadrado, esto lo hace redondo
-        backgroundColor: 'white', // Fondo blanco por si el logo tiene transparencia
+        borderRadius: 20,
+        backgroundColor: 'white',
     },
     searchContainer: {
         flex: 1,
@@ -224,11 +299,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    // --- SCROLL CONTENT ---
     scrollContainer: {
         flex: 1,
     },
-    // --- BANNER ---
+    badge: {
+        position: 'absolute',
+        top: -5,
+        right: -5,
+        backgroundColor: COLORS.orange,
+        borderRadius: 10,
+        width: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        borderColor: COLORS.purple
+    },
+    badgeText: {
+        color: 'white',
+        fontSize: 9,
+        fontWeight: 'bold',
+    },
     bannerContainer: {
         margin: 20,
         borderRadius: 20,
@@ -248,7 +339,7 @@ const styles = StyleSheet.create({
         marginBottom: 5,
     },
     bannerSubtitle: {
-        color: '#FFD699', // Un naranja muy claro para contraste
+        color: '#FFD699',
         fontSize: 14,
         fontWeight: '600',
         marginBottom: 5,
@@ -275,7 +366,6 @@ const styles = StyleSheet.create({
         height: 100,
         opacity: 0.9,
     },
-    // --- QUICK ACTIONS ---
     quickActionsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-around',
@@ -301,18 +391,16 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
     },
-    // --- SECTIONS ---
     sectionContainer: {
         marginBottom: 25,
     },
     sectionTitle: {
-        fontSize: 25,
+        fontSize: 22,
         fontWeight: 'bold',
         color: COLORS.purple,
         marginLeft: 20,
         marginBottom: 15,
     },
-    // --- PRODUCT CARD ---
     productCard: {
         backgroundColor: COLORS.white,
         width: 150,
@@ -322,7 +410,6 @@ const styles = StyleSheet.create({
         marginRight: 15,
         alignItems: 'center',
         justifyContent: 'space-between',
-        // Sombras
         elevation: 3,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -333,7 +420,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         borderWidth: 2,
         borderColor: COLORS.orange,
-        borderStyle: 'dashed', // Borde punteado para "crear"
+        borderStyle: 'dashed',
     },
     priceTag: {
         position: 'absolute',

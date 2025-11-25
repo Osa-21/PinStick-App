@@ -16,6 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
+import { useCart } from '../context/CartContext';
+
+
 const COLORS = {
     purple: '#5E2B87',
     orange: '#FF8c00',
@@ -30,6 +33,9 @@ const ExploreScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState('Todos');
     const [searchText, setSearchText] = useState('');
+
+    const { addToCart, cartCount } = useCart();
+
 
     const fetchProducts = async () => {
         setLoading(true);
@@ -86,8 +92,16 @@ const ExploreScreen = ({ navigation }) => {
         </View>
     );
 
+    const handleQuickAdd = async (item) => {
+        await addToCart(item, 1); // Agregamos 1 unidad
+        Alert.alert("¡Agregado!", `Se agregó ${item.name} al carrito.`);
+    };
+
     const renderProductItem = ({ item }) => (
-        <TouchableOpacity style={styles.productCard}>
+        <TouchableOpacity 
+            style={styles.productCard}
+            onPress={() => navigation.navigate('ProductDetail', { product: item })}
+        >
         <Image 
             source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }} 
             style={styles.productImage} 
@@ -95,7 +109,10 @@ const ExploreScreen = ({ navigation }) => {
         />
         <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
         <Text style={styles.productPrice}>${item.price}</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => handleQuickAdd(item)}
+        >
             <Ionicons name="add" size={20} color={COLORS.white} />
         </TouchableOpacity>
         </TouchableOpacity>
@@ -119,7 +136,10 @@ const ExploreScreen = ({ navigation }) => {
                 />
                 </View>
                 <View style={styles.headerIcons}>
-                <TouchableOpacity style={{marginRight: 15}}>
+                <TouchableOpacity 
+                    style={{marginRight: 15}}
+                    onPress={() => navigation.navigate('Cart')}
+                >
                     <Ionicons name="cart-outline" size={26} color={COLORS.white} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => navigation.navigate('Perfil')}>
@@ -200,6 +220,25 @@ const styles = StyleSheet.create({
     headerIcons: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+      // 4. ESTILOS DEL BADGE
+    badge: {
+        position: 'absolute',
+        top: -5,
+        right: -5,
+        backgroundColor: COLORS.orange,
+        borderRadius: 10,
+        width: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        borderColor: COLORS.purple
+    },
+    badgeText: {
+        color: 'white',
+        fontSize: 9,
+        fontWeight: 'bold',
     },
     contentContainer: {
         flex: 1,
